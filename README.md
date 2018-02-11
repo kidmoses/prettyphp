@@ -6,7 +6,7 @@ Pretty PHP is a Textmate 2 bundle that formats (beautify) PHP source code.
 Currently it has the following features:
 
 - **Pretty PHP Features**:
-	-  can specifiy which PHP tag to use - could be &lt;? or &lt;?php or &lt;?PHP
+	- can specifiy which PHP tag to use - could be <? or <?php or <?PHP
 	- specify the tab size
 	- choose spacees or tabs for indent 
 	- choose the starting indent size 
