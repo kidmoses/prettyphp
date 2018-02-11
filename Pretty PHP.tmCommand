@@ -1,0 +1,908 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>beforeRunningCommand</key>
+	<string>nop</string>
+	<key>command</key>
+	<string>#!/usr/bin/env php
+
+&lt;?php
+/**
+ * PrettyPHP
+ *
+ * See README for more information.
+ *
+ * VERSION created for Textmate 2
+ *
+ * PHP version &gt;= 5.0
+ *
+ * @copyright 2018 to present, Howard Walsh
+ * @license   The MIT License (MIT)
+ *
+ * Copyright (c) 2018 Howard Walsh
+ * 
+ * Permission is hereby granted, free of charge, to any person obtaining a copy of this 
+ * software and associated documentation files (the "Software"), to deal in the Software 
+ * without restriction, including without limitation the rights to use, copy, modify, merge, 
+ * publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons 
+ * to whom the Software is furnished to do so, subject to the following conditions:
+ * 
+ * The above copyright notice and this permission notice shall be included in all copies 
+ * or substantial portions of the Software.
+ * 
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING 
+ * BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND 
+ * NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, 
+ * DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, 
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+ *
+ * @version 1.0 (2018-02-11)
+ * @author  Howard Walsh &lt;prettyphp@kidmoses.com&gt;
+ * @package PrettyPHP
+ */
+
+
+//////////////// DEFAULT CONFIGURATION ///////////////////
+/*                 Change as desired                    */
+//////////////////////////////////////////////////////////
+
+$PHP_TAG = "&lt;?php";                             // PHP tag - could be &lt;? or &lt;?php or &lt;?PHP
+$TAB_SIZE = 2;                                  // tab size
+$USE_SPACE = TRUE;                              // use space for tabs 
+$START_INDENT = 0;                              // starting indent size 
+$OTBS = TRUE;                                   // use the One True Brace Style (K&amp;R)
+$BRACKET_SPACE = FALSE;                         // add space inside brackets
+$NEWLINES = TRUE;                               // add newlines between structures
+$REMOVE_COMMENTS = FALSE;                       // removes all comments
+$INDENT_CASE = TRUE;                            // indent case/default statements
+$REMOVE_EMPTY_LINES = FALSE;                    // remove blank lines - even if newlines were added
+$SPACE_CONDITIONS = FALSE;                      // add space after if, for, while, do
+$SPACE_PUNCTUATION = TRUE;                      // adds space after commas and semi-colons
+$SPACE_MATH_OPERATORS = TRUE;                   // spaces around math operators: * / + - =
+$SPACE_LOGIC_OPERATORS = TRUE;                  // spaces around logical operators: &amp;&amp; ||
+$SPACE_EQUALITY_OPERATORS = TRUE;               // spaces around equality operators: === !=== == !=
+$SPACE_RELATIONAL_OPERATORS = TRUE;             // spaces around relational operators: &lt;= &gt;= &lt; &gt;
+$SPACE_ASSIGNMENT_OPERATORS = TRUE;             // spaces around assignment operators: += -= *= /=
+$SPACE_BITWISE_OPERATORS = FALSE;               // spaces around bitwise operators: | &amp; ^ &gt;&gt; &lt;&lt; ~
+
+
+// Array used for adding space after statement
+// Change to add spaces after statements as desired
+$C_STRUCT = array("else", "elseif", "else if", "if", "do", "while", "for", "foreach", "switch");
+
+// Array used for adding space after punctuation
+// Change to add spaces after punctuation marks as desired
+$S_PUNCTUATION = array(",", ";");
+
+// Array used for adding space after conditions
+// Change to add spaces after conditions as desired
+$S_CONDITIONS = array("if","elseif", "do", "while", "for", "foreach", "switch");
+
+
+//////////////// CONTROL FUNCTIONS ///////////////////
+/*             Comment out as desired               */
+//////////////////////////////////////////////////////
+
+$content = file_get_contents('php://stdin');
+
+$content = str_ireplace ("&lt;?php","&lt;?",$content);
+$content = str_ireplace ("&lt;?",$PHP_TAG,$content);
+
+$content = trimWhitespace($content);            // trim whitespace from lines
+$content = cleanMLComments($content);           // clean multi-line comments
+$content = cleanSLComments($content);           // clean single-line comments
+$content = removeComments($content);            // remove unwanted comments
+
+$content = delBlankLines($content);             // remove blank lines
+
+$content = newLineBefore($content, "{");        // beginning of function
+$content = newLineBefore($content, "}");        // end of function if not on own line
+
+$content = newLineAfter($content, "{");         // start of function
+$content = newLineAfter($content, "}");         // end of function
+$content = newLineAfter($content, ";");         // end of line
+$content = newLineAfter($content, ":");         // switch / case, etc.
+
+$content = trimWhitespace($content);            // trim whitespace from lines
+
+$content = addSpaceBefore($content,"*");        // align multi-line comment
+$content = addBracketSpace($content);           // add space around brackets
+
+$content = spaceOperators($content);            // spaces around math operators
+$content = spaceConditions($content);           // add space after if, for, while, do
+$content = spacePunctuation($content);          // adds space after commas and semi-colons
+
+$content = formControlStructures($content);     // move opening brackets to end of lines
+$content = removeBrackets($content);            // remove brackets from require/include statements
+$content = doOneTrueBraceStyle($content);       // do One True Brace Style
+$content = indentScript($content);              // indent the script
+$content = doNewlines($content);                // add newlines before functions
+
+echo $content;                                  //echo out modified content
+
+
+/////////////////////  FUNCTIONS  //////////////////////
+/*            ++ Do Not Change Below ++               */
+////////////////////////////////////////////////////////
+
+/* delete blank lines */
+function delBlankLines($lines){
+  $tContent = "";
+  foreach(preg_split("/((\r?\n)|(\r\n?))/", $lines) as $line){
+    if(strlen($line)&gt;0) {
+      $tContent .= $line . "\n";
+    }
+  } 
+  return $tContent;
+}
+
+/* trim whitespace from lines */
+function trimWhitespace($lines){
+  $tContent = "";
+  foreach(preg_split("/((\r?\n)|(\r\n?))/", $lines) as $line){
+      $tContent .= trim($line) . "\n";
+  } 
+  return $tContent;
+}
+
+/* adds space after commas and semi-colons */
+function spacePunctuation($lines) {
+  GLOBAL $SPACE_PUNCTUATION,$S_PUNCTUATION;
+  $tContent = ""; 
+  $punctuation = $S_PUNCTUATION;
+  
+  foreach(preg_split("/((\r?\n)|(\r\n?))/", $lines) as $line){
+    if(!isComment($line)) {
+      if($SPACE_PUNCTUATION) {
+        foreach($punctuation as $mark) {
+          $line = str_replace($mark."",$mark." ",$line);
+        }
+      } else {
+        foreach($punctuation as $mark) {
+          $line = str_replace($mark." ",$mark."",$line);
+        }        
+      }
+      /* trim double spaces if needed */
+      $line = str_replace("  "," ",$line);
+    }    
+    $tContent .= $line . "\n";
+  } 
+  return $tContent;  
+}
+
+/* add space after if, for, while, do, etc. */
+function spaceConditions($lines) {
+  GLOBAL $SPACE_CONDITIONS, $S_CONDITIONS;
+  $tContent = ""; 
+  $conditions = $S_CONDITIONS;
+  
+  foreach(preg_split("/((\r?\n)|(\r\n?))/", $lines) as $line){
+    if(!isComment($line)) {
+      if($SPACE_CONDITIONS) {
+        foreach($conditions as $condition) {
+          $line = str_replace($condition."(",$condition." (",$line);
+        }
+      } else {
+        foreach($conditions as $condition) {
+          $line = str_replace($condition." (",$condition."(",$line);
+        }        
+      }
+    }    
+    $tContent .= $line . "\n";
+  } 
+  return $tContent;  
+}
+
+/* add space around operator provided */
+function insertOperatorSpace($line, $op) {
+  $skip1 = "+-=/?&lt;&gt;!#%^&amp;*_|\/:;{}($~`";
+  $skip2 = "+-=/?&lt;&gt;#%^&amp;*_|\/:;{})~`";
+
+  $skip = 0;
+  $pos = strpos($line, $op);   
+  /* special conditions for operators: -- ++ -&gt; */ 
+  while($pos !== FALSE) {
+    if($op == "-" &amp;&amp; ($line[$pos+1] == "-" || $line[$pos+1] == "&gt;")) {
+      $skip = 1;
+      $bump = 2;
+    }
+    if($op == "+" &amp;&amp; ($line[$pos+1] == "+")) {
+      $skip = 1;
+      $bump = 2;
+    }
+    if($op == "&gt;" &amp;&amp; ($line[$pos-1] == "-")) {
+      $skip = 1;
+      $bump = 2;
+    }
+    if( strpos($skip2, $line[$pos+strlen($op)]) !== FALSE ) {
+      $skip = 1;
+      $bump = 2;
+    }
+      
+    if(!$skip) {  
+      if(!inQuotes($line, $pos)) {
+        $bump = 0;
+        if($line[$pos-1] != " " &amp;&amp; strpos($skip1, $line[$pos-1]) === FALSE) {
+          $line = substr_replace($line, " ", $pos, 0);
+          $bump = 1;
+        }
+        $pos = $pos + strlen($op) + $bump;
+        $bump = 0;
+        if($line[$pos] != " " &amp;&amp; strpos($skip2, $line[$pos]) === FALSE) {
+          $line = substr_replace($line, " ", $pos, 0);
+          $bump = 1;
+        }
+      }
+    }
+    $skip = 0;
+    $pos = strpos($line, $op, $pos + strlen($op) + $bump);
+   }
+  return $line;
+}
+
+/*add spaces around operators */
+function spaceOperators($lines) {
+  GLOBAL $SPACE_MATH_OPERATORS, $SPACE_LOGIC_OPERATORS, $SPACE_EQUALITY_OPERATORS, 
+         $SPACE_RELATIONAL_OPERATORS, $SPACE_BITWISE_OPERATORS;
+         
+  $tContent = "";  
+  foreach(preg_split("/((\r?\n)|(\r\n?))/", $lines) as $line){
+    if(!isComment($line)) {
+      if ($SPACE_MATH_OPERATORS) {
+        $arr = array("+", "-", "*", "/","=");
+        foreach($arr as $op) {
+          $line = insertOperatorSpace($line,$op);
+        }
+      }
+      if ($SPACE_EQUALITY_OPERATORS) {
+        $arr = array("==", "!=","!==", "===", "!===");
+        foreach($arr as $op) {
+          $line = insertOperatorSpace($line,$op);
+        }
+      }
+      if ($SPACE_LOGIC_OPERATORS) {
+        $arr = array("&amp;&amp;", "||");
+        foreach($arr as $op) {
+          $line = insertOperatorSpace($line,$op);
+        }
+      }
+      if ($SPACE_RELATIONAL_OPERATORS) {
+        $arr = array("&lt;=", "&gt;=", "&lt;", "&gt;");
+        foreach($arr as $op) {
+          $line = insertOperatorSpace($line,$op);
+        }
+      }
+      if ($SPACE_ASSIGNMENT_OPERATORS) {
+        $arr = array("+=", "-=", "*=", "/=", ".=");
+        foreach($arr as $op) {
+          $line = insertOperatorSpace($line,$op);
+        }
+      }
+      if ($SPACE_BITWISE_OPERATORS) {
+        $arr = array("|", "&amp;", "^", "~", "&gt;&gt;", "&lt;&lt;");
+        foreach($arr as $op) {
+          $line = insertOperatorSpace($line,$op);
+        }
+      }
+    }
+    $tContent .= $line . "\n";
+  } 
+  return $tContent;
+}
+
+/* add newlines between structures */
+function doNewlines($lines) {
+  GLOBAL $REMOVE_EMPTY_LINES;
+  $tContent = "";
+  $isInclude = FALSE;
+  
+  if ($REMOVE_EMPTY_LINES) {
+    return $lines;
+  }
+  
+  foreach(preg_split("/((\r?\n)|(\r\n?))/", $lines) as $line){
+    $pos = strpos($line, "}");
+    if($pos !== FALSE &amp;&amp; $pos === 0) {
+        $line = $line . "\n";
+    } 
+    $pos = strpos($line, "*/");
+    if($pos !== FALSE &amp;&amp; $pos == 1 &amp;&amp; !inQuotes($line, $pos)) {
+        $line = $line . "\n";
+    } 
+    if(strpos($line, "require") === 0 || strpos($line, "include") === 0) {
+        $isInclude = TRUE;
+    }
+    if($isInclude &amp;&amp; strpos($line, "require") !== 0 &amp;&amp; strpos($line, "include") !== 0) {
+        $line = "\n" . $line;
+        $isInclude = FALSE;     
+    }
+    $tContent .= $line . "\n";
+  } 
+  return $tContent;  
+}
+
+/* get number of lines */
+/* not used */
+function getNumLines($lines) {
+  $n = 0;
+  foreach(preg_split("/((\r?\n)|(\r\n?))/", $lines) as $line) {
+    $n++;
+  }
+  return $n;
+}
+
+/* indent the script */
+function indentScript($lines) {
+  GLOBAL $PHP_TAG, $INDENT_CASE;
+  $i = 0;
+  $tab = "";
+  $scp = array();          // closing tab positions for switch/case structures
+  $isSwitch = FALSE;
+  
+  function setTab($indent) {
+    GLOBAL $TAB_SIZE, $USE_SPACE, $START_INDENT;
+    $tab = "";
+    for($i=0;$i &lt; $START_INDENT;$i++) {
+      $tab .= " ";
+    }
+
+    if($indent &lt; 0) {
+     $indent = 0;
+    }
+    
+    if($USE_SPACE) {
+      for($i=0;$i &lt; ($indent * $TAB_SIZE);$i++) {
+        $tab .= " ";
+      }
+    } else {
+      for($i=0;$i &lt; $indent;$i++) {
+        $tab .= "\t";
+      }        
+    } 
+    return $tab;   
+  }
+
+  $tContent = "";
+  foreach(preg_split("/((\r?\n)|(\r\n?))/", $lines) as $line) {
+    if($line == $PHP_TAG || $line == "?&gt;") {
+      $tmpline = $line;
+    } else {
+      $tmpline = $tab . $line;
+    }
+    
+    if($i &lt; 0) {
+      $i = 0;
+    }
+    
+    $pos = strpos($line, "}");
+    if($pos !== FALSE &amp;&amp; !isComment($line) &amp;&amp; !inQuotes($line, $pos)) {
+      $tab = setTab(--$i);
+      if($INDENT_CASE &amp;&amp; !empty($scp)) {    // check against switch/case closing bracket postion
+        if($i == end($scp)) {               // if tab position matches switch case position
+          $tab = setTab(--$i);              // reduce indent
+          array_pop($scp);                  // and remove switch / case position
+        }
+      }
+      if(!$INDENT_CASE &amp;&amp; !empty($scp)) {   // check against switch/case closing bracket postion
+        if($i == end($scp)) {               // if tab position matches switch case position
+          $tab = setTab(++$i);              // reduce indent
+          array_pop($scp);                  // and remove switch / case position
+        }
+      }
+      $tmpline = $tab . $line;              // reset line as tab changed
+    }
+    
+    $pos = strpos($line, "{");              // indent lines following opening bracket
+    if($pos !== FALSE &amp;&amp; !isComment($line) &amp;&amp; !inQuotes($line, $pos)) {
+      $tab = setTab(++$i);
+    }
+    
+    if(!$INDENT_CASE) {
+      $pos = strpos($line, "switch");
+      if(isCode($line,$pos)) {
+        $scp[] = $i - 2;
+        $isSwitch = TRUE;
+      }
+      
+      $pos = strpos($line, "default");
+      if($pos === FALSE) {
+        $pos = strpos($line, "case");
+      }
+      if(isCode($line,$pos)) {
+        if($isSwitch) {
+          $pos = strpos($line, "{");
+          if(isCode($line,$pos)) {
+            $tab = setTab(--$i);
+          } else {
+            array_pop($scp);
+          }
+          $isSwitch = FALSE;
+        }
+        $tab = setTab(--$i);
+        $tmpline = $tab . $line; 
+        $tab = setTab(++$i);
+      }      
+    }
+    
+    if($INDENT_CASE) {
+      $pos = strpos($line, "switch");
+      if(isCode($line,$pos)) {
+        $scp[] = $i;
+        $tab = setTab(++$i);
+        $isSwitch = TRUE;
+      }
+
+      $pos = strpos($line, "default");
+      if($pos === FALSE) {
+        $pos = strpos($line, "case");
+      }
+      if(isCode($line,$pos)) {
+        if($isSwitch) {
+          $pos = strpos($line, "{");
+          if(isCode($line,$pos)) {
+            $tab = setTab(--$i);
+            array_pop($scp);
+          }
+        }
+        $tab = setTab(--$i);
+        $tmpline = $tab . $line; 
+        $tab = setTab(++$i);
+        $isSwitch = FALSE;
+      }      
+    }
+       
+    $tContent .= $tmpline . "\n"; 
+  }
+  return $tContent;
+}
+
+/* put opening brackets on line before bracket */
+function doOneTrueBraceStyle($lines) {
+  GLOBAL $OTBS;
+  
+  if(!$OTBS) {
+    return ($lines);
+  }  
+  
+  $tContent = $lines;
+  $tContent = str_replace("\n{\n", " {\n", $tContent); 
+  return $tContent;
+}
+  
+/* remove brackets from require/include statements */
+function removeBrackets($lines) {
+  $tContent = "";
+  foreach(preg_split("/((\r?\n)|(\r\n?))/", $lines) as $line) {  
+    if(!isComment($line)) {
+       $pos = strpos($line, "require");
+       if($pos !== FALSE &amp;&amp; !inQuotes($line, $pos)) {
+         $pos1 = strpos($line, "(");
+         if($pos1 !== FALSE &amp;&amp; !inQuotes($line, $pos1)) {
+           $pos2 = strpos($line, ")", $pos1);
+           if($pos2 !== FALSE &amp;&amp; !inQuotes($line, $pos2)) {
+             $line = trim(substr($line,0,$pos1)) . " " . trim(substr($line,$pos1+1,$pos2-$pos1-1)) . trim(substr($line,$pos2+1));
+           }
+         }
+       }
+       
+       $pos = strpos($line, "include");
+       if($pos !== FALSE &amp;&amp; !inQuotes($line, $pos)) {
+         $pos1 = strpos($line, "(");
+         if($pos1 !== FALSE &amp;&amp; !inQuotes($line, $pos1)) {
+           $pos2 = strpos($line, ")", $pos1);
+           if($pos2 !== FALSE &amp;&amp; !inQuotes($line, $pos2)) {
+             $line = trim(substr($line,0,$pos1)) . " " . trim(substr($line,$pos1+1,$pos2-$pos1-1)) . trim(substr($line,$pos2+1));
+           }
+         }
+       }
+    }
+    $tContent .= $line . "\n";
+  }
+  return $tContent;
+}
+
+/* align brackets for control structures */
+function formControlStructures($lines) {
+  GLOBAL $C_STRUCT;
+  
+  $tContent = "";
+  foreach(preg_split("/((\r?\n)|(\r\n?))/", $lines) as $line) {  
+    $line_end = "\n";
+    if(!isComment($line)) {
+      foreach ($C_STRUCT as $cstruct) {
+        if (strpos($line, $cstruct) === 0) {
+          str_replace("\n", "", $line); 
+          $line_end = " ";         
+        }        
+      }
+    }
+    $tContent .= $line . $line_end;
+  }
+  
+  // fix else structures
+  $tContent = str_replace("}\nelse", "} else", $tContent); 
+  
+  // fix do/while structures
+  $pos = strpos($tContent, "do {");
+  while ($pos !== FALSE) {
+    $pos = strpos($tContent, "}\nwhile", $pos);
+    if($pos !== FALSE) {
+      $tContent = substr_replace($tContent, " ", $pos+1, 1);
+      $pos = strpos($tContent, ";", $pos+7);
+      if($pos !== FALSE) {
+        $tContent = substr_replace($tContent, "\n", $pos+1, 0);
+        $pos += 2; // hack to clean up possible space after ;
+        while($tContent[$pos] == " ") {
+          $tContent = substr_replace($tContent, "", $pos, 1); 
+          $pos++;
+        }  
+      }
+      $pos = strpos($tContent, "do {", $pos+3);  
+    }
+  } 
+
+  return $tContent;    
+}
+
+/* remove spaces inside brackets - comments excepted */
+function removeBracketSpace($lines) {
+  $tContent = "";
+  foreach(preg_split("/((\r?\n)|(\r\n?))/", $lines) as $line) {  
+    if(!isComment($line)) {
+      $line = str_replace("( ", "(", $line);
+      $line = str_replace(" )", ")", $line);
+      $line = str_replace("[ ", "[", $line);
+      $line = str_replace(" ]", "]", $line);
+    }
+    $tContent .= $line . "\n";
+  }
+  return $tContent;
+}
+
+/* add spaces inside brackets - comments excepted */
+function addBracketSpace($lines) {
+  GLOBAL $BRACKET_SPACE;
+  
+  if(!$BRACKET_SPACE) {
+    return removeBracketSpace($lines);
+  }
+  
+  $tContent = "";
+  foreach(preg_split("/((\r?\n)|(\r\n?))/", $lines) as $line) {
+    if(!isComment($line)) {
+      $pos = strpos($line, "(");
+      while($pos !== FALSE) {
+        if(($line[$pos+1] != "(") &amp;&amp; ($line[$pos+1] != ")") &amp;&amp; ($line[$pos+1] != " ")) {
+          $line = substr_replace($line, " ", $pos+1, 0);
+        }
+        $pos = strpos($line, "(", $pos+1);
+      }
+      
+      $pos = strpos($line, ")");
+      while($pos !== FALSE) {
+        if(($line[$pos-1] != "(") &amp;&amp; ($line[$pos-1] != " ")) {
+          $line = substr_replace($line, " ", $pos, 0);
+        }
+        $pos = strpos($line, ")", $pos+1);
+      }
+      
+      $pos = strpos($line, "[");
+      while($pos !== FALSE) {
+        if(($line[$pos+1] != "[") &amp;&amp; ($line[$pos+1] != "]") &amp;&amp; ($line[$pos+1] != " ")) {
+          $line = substr_replace($line, " ", $pos+1, 0);
+        }
+        $pos = strpos($line, "[", $pos+1);
+      }
+      
+      $pos = strpos($line, "]");
+      while($pos !== FALSE) {
+        if(($line[$pos-1] != "[") &amp;&amp; ($line[$pos-1] != " ")) {
+          $line = substr_replace($line, " ", $pos, 0);
+        }
+        $pos = strpos($line, "]", $pos+1);
+      }
+    }
+    $tContent .= $line . "\n";
+  }
+  return $tContent;  
+}
+
+/* add space before token - ie: * in multi-line comments at start of script */
+function addSpaceBefore($lines, $token) {
+  $tContent = "";
+  foreach(preg_split("/((\r?\n)|(\r\n?))/", $lines) as $line){
+    if(!isComment($line)) {
+      $line = str_replace(" ".$token, $token, $line);  // remove existing space to prevent double spaces
+      $line = str_replace($token, " ".$token, $line);  // now add space as needed
+    }
+    $tContent .= $line . "\n";
+  }
+  return $tContent;  
+}
+
+/* start token on a newline */
+function newLineBefore($lines, $token) {
+  $tContent = "";
+  foreach(preg_split("/((\r?\n)|(\r\n?))/", $lines) as $line){
+    if(!isComment($line)) {
+      $pos = strpos($line, $token);
+      while($pos !== FALSE) {
+        if (!inQuotes($line,$pos)) {
+          if ($pos &gt; 0) {     // not already at beginning of line           
+            $line = substr_replace($line, "\n", $pos, 0);
+          }
+        }
+        $pos = strpos($line, $token, $pos+strlen($token)+1);
+      }      
+    }
+    $tContent .= $line . "\n";
+  }
+  return $tContent;   
+}
+
+/* token finishes line */
+function newLineAfter($lines, $token) {
+  $tContent = "";
+  foreach(preg_split("/((\r?\n)|(\r\n?))/", $lines) as $line) {
+    if(!isComment($line)) {
+      $line = trim($line);
+      $pos = strpos($line, $token);
+      while($pos !== FALSE) {
+        if (!inQuotes($line,$pos) &amp;&amp; !inBrackets($line,$pos)) {
+          if ($pos &lt; strlen($line)-1) { 
+            /* trim whitespace after token */
+            $line = substr($line,0,$pos+strlen($token)) . "\n" . trim(substr($line,$pos+strlen($token)));
+          }
+        }
+        $pos = strpos($line, $token, $pos+1);
+      }
+    }
+    $tContent .= $line . "\n";
+  }
+  return $tContent;   
+}
+
+/* remove all comments */
+function removeComments($lines) {
+  GLOBAL $REMOVE_COMMENTS;
+  
+  $tContent = "";
+  if(!$REMOVE_COMMENTS) {
+    return $lines;
+  }
+  
+  foreach(preg_split("/((\r?\n)|(\r\n?))/", $lines) as $line) {
+    if(!isComment($line)) {
+      $tContent .= $line . "\n";
+    }
+  }
+  return $tContent;
+}
+
+/* determine if particular line */
+/* and position in line is actually code */
+function isCode($line,$pos) {
+  if($pos === FALSE) {
+    return FALSE;
+  }
+  if(isComment($line)) {
+    return FALSE;
+  }
+  if(inQuotes($line,$pos)) {
+    return FALSE;
+  }
+  return TRUE;
+}
+
+/* checks if given line is a comment line - usually just ignored in script */
+function isComment($line) {
+  $pos = strpos($line, "//");
+  if($pos !== FALSE &amp;&amp; $pos === 0) {
+    return TRUE;
+  }
+  $pos = strpos($line, "#");
+  if($pos !== FALSE &amp;&amp; $pos === 0) {
+    return TRUE;
+  }
+  $pos = strpos($line, "/*");
+  if($pos !== FALSE &amp;&amp; $pos === 0) {
+    return TRUE;
+  }
+  $pos = strpos($line, "*");
+  if($pos !== FALSE &amp;&amp; $pos &lt;2) {
+    return TRUE;
+  }
+  return FALSE;  
+}
+
+/* check if certain position in string ($ptc) is */
+/* inside brackets - ie: for($x=3;$x&lt;3;$==) */
+function inBrackets($line, $ptc) {
+  $isBracket = 0;
+  if($ptc == 0) {
+    return FALSE;
+  }
+  for($i=0;$i&lt;strlen($line);$i++) {
+    if($line[$i] == "(") {
+        $isBracket++;
+    }
+    if($line[$i] == ")") {
+        $isBracket--;
+    }
+    if($i == $ptc) {
+      return $isBracket;
+    }
+  }
+}
+
+/* check if certain position in string ($ptc) is inside quotes */
+function inQuotes($line, $ptc) {
+  $isQuote = FALSE;
+  for ($i = 0; $i &lt; strlen($line); $i++){
+    if($line[$i] == "'" &amp;&amp; !$isQuote) {
+      if($ptc &lt; $i) { return FALSE; }
+      $isQuote = TRUE; 
+      continue;
+    }
+    if($line[$i] == "'" &amp;&amp; $isQuote) {
+      if($ptc &lt; $i) { return TRUE; }
+      $isQuote = FALSE; 
+    }
+  }
+  
+  $isQuote = FALSE;
+  for ($i = 0; $i &lt; strlen($line); $i++){
+    if($line[$i] == '"' &amp;&amp; !$isQuote) {
+      if($ptc &lt; $i) { return FALSE; }
+      $isQuote = TRUE; 
+      continue;
+    }
+    if($line[$i] == '"' &amp;&amp; $isQuote) {
+      if($ptc &lt; $i) { return TRUE; }
+      $isQuote = FALSE; 
+    }
+  }
+  return FALSE;  
+}
+
+function isProtocol($line,$pos) {
+  /*$protocols = array("ARP","DHCP","DNS","DSN","FTP","FTPS","HTTP","HTTPS","IMAP",'ICMP',"IDRP","IP","IRC",
+                     "POP3","PAR","RLOGIN","SMTP","SSL","SSH","TCP","TELNET","UPD","UPS"); */
+  
+  $protocols = array("FTP","FTPS","HTTP","HTTPS");
+  foreach($protocols as $protocol) {
+    $ptc = $pos - (strlen($protocol)+1);
+    if(strpos($line,$protocol . ":") == $ptc) {
+      echo "here ";
+      return TRUE;
+    }
+  }
+  return FALSE;  
+}
+
+/* Format single-line comments */
+function cleanSLComments($lines) {
+  $tContent = "";
+  foreach(preg_split("/((\r?\n)|(\r\n?))/", $lines) as $line) {
+    $line = trim($line);
+    $pos = strpos($line, "//"); 
+    if($pos !== 0) {
+      while($pos !== FALSE) {
+        if (!inQuotes($line,$pos) &amp;&amp; !isProtocol($line,$pos)) {
+          $line = substr($line,$pos) . "\n" . substr($line,0,$pos);
+          if($line[2] != " ") {
+             $line = substr_replace($line, " ", 2, 0);
+          }
+          $pos = FALSE;
+        } else {
+          $pos = strpos($line, "//", $pos+2);
+        }
+      }
+    }
+    
+    $pos = strpos($line, "#"); 
+    if($pos !== 0) {
+      while($pos !== FALSE) {
+        if (!inQuotes($line,$pos)) {
+          $line = substr($line,$pos) . "\n" . substr($line,0,$pos);
+          if($line[1] != " ") {
+             $line = substr_replace($line, " ", 1, 0);
+          }
+          $pos = FALSE;
+        } else {
+          $pos = strpos($line, "#", $pos+1);
+        }
+      }
+    }
+    
+    $tContent .= trim($line) . "\n";
+  }
+  return $tContent;
+}
+
+/* Format multi-line comments */
+function cleanMLComments($lines) {
+  $tContent = "";
+  $isMLCom = FALSE;  // multi-line comment
+  $lineNum = 0;                                
+  foreach(preg_split("/((\r?\n)|(\r\n?))/", $lines) as $line) {
+    $isFirstLine = FALSE;
+    $nl = "";
+    if(!$isMLCom) {
+      $pos = strpos($line,"/*");                          // start of comment found
+      if($pos !== FALSE) {
+        if($pos &gt; 0) {
+          $line = str_replace("/*", "\n/*", $line);       // ensure comment starts on newline
+        }
+        $pos += 4;
+        $isMLCom = TRUE;
+        $isFirstLine = TRUE;                              // mark as multi-line comment
+      }
+    }
+    if($isMLCom) {
+      $pos = strpos($line,"*",$pos);                      // look for other asterisk
+      if($pos !== FALSE) {
+        if($pos == 0) {                                   // asterisk found at beginning of line
+          if($line[$pos+1] == "/") {                      // is this an end-of-comment marker
+            $line = str_replace("*/", " */", $line);      // align asterisk and get out
+            $isMLCom = FALSE;
+            $pos = FALSE;
+          } else {
+            $line = substr_replace($line, " ", $pos, 0);  // else align asterisk 
+            $pos = 2;  
+          }           
+        }
+        while($pos &gt; 0) {
+          $pos = strpos($line,"*",$pos);                  // look for nested asterisk
+          if($pos !== FALSE) {
+            if($line[$pos+1] == "/") {                    // end-of-comment found - mark and get out
+              if(!$isFirstLine) {                         // is comment on one line
+                $line = substr_replace($line, "\n ", $pos, 0);
+              }
+              $isMLCom = FALSE;
+              $pos += 3;
+              //break;
+            } else {                                      // not end of comment
+              if($line[$pos-1] == "/") {                  // start of new comment
+                $line = substr_replace($line, "\n", $pos-1, 0);
+                $isMLCom = TRUE; 
+                $pos += 2; 
+              } else {                                    // comment continues
+                $line = substr_replace($line, "\n *", $pos, 1); // put nested asterisk on new line
+                $pos += 3;
+              }
+            } 
+          }          
+        }
+      }      
+    }    
+    $tContent .= $line . "\n";
+  }
+  return $tContent;
+}
+
+?&gt;
+</string>
+	<key>input</key>
+	<string>selection</string>
+	<key>inputFormat</key>
+	<string>text</string>
+	<key>keyEquivalent</key>
+	<string>~@C</string>
+	<key>name</key>
+	<string>Pretty PHP</string>
+	<key>outputCaret</key>
+	<string>interpolateByLine</string>
+	<key>outputFormat</key>
+	<string>text</string>
+	<key>outputLocation</key>
+	<string>replaceInput</string>
+	<key>scope</key>
+	<string>text.html.php</string>
+	<key>uuid</key>
+	<string>8C581571-DB22-4296-9835-DE276EED661C</string>
+	<key>version</key>
+	<integer>2</integer>
+</dict>
+</plist>
