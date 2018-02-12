@@ -6,9 +6,8 @@
 	<string>nop</string>
 	<key>command</key>
 	<string>#!/usr/bin/env php
-
 &lt;?php
-/**
+/*
  * PrettyPHP
  *
  * See README for more information.
@@ -37,7 +36,7 @@
  * DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, 
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  *
- * @version 1.0 (2018-02-11)
+ * @version 1.01 (2018-02-11)
  * @author  Howard Walsh &lt;prettyphp@kidmoses.com&gt;
  * @package PrettyPHP
  */
@@ -293,7 +292,7 @@ function spaceOperators($lines) {
 
 /* add newlines between structures */
 function doNewlines($lines) {
-  GLOBAL $REMOVE_EMPTY_LINES;
+  GLOBAL $REMOVE_EMPTY_LINES, $START_INDENT;
   $tContent = "";
   $isInclude = FALSE;
   
@@ -301,19 +300,20 @@ function doNewlines($lines) {
     return $lines;
   }
   
+  $si = $START_INDENT;
   foreach(preg_split("/((\r?\n)|(\r\n?))/", $lines) as $line){
     $pos = strpos($line, "}");
-    if($pos !== FALSE &amp;&amp; $pos === 0) {
+    if($pos !== FALSE &amp;&amp; $pos === 0 + $si) {
         $line = $line . "\n";
     } 
     $pos = strpos($line, "*/");
-    if($pos !== FALSE &amp;&amp; $pos == 1 &amp;&amp; !inQuotes($line, $pos)) {
+    if($pos !== FALSE &amp;&amp; $pos == (1 + $si) &amp;&amp; !inQuotes($line, $pos + $si)) {
         $line = $line . "\n";
     } 
-    if(strpos($line, "require") === 0 || strpos($line, "include") === 0) {
+    if(strpos($line, "require") === (0 + $si) || strpos($line, "include") === (0 + $si)) {
         $isInclude = TRUE;
     }
-    if($isInclude &amp;&amp; strpos($line, "require") !== 0 &amp;&amp; strpos($line, "include") !== 0) {
+    if($isInclude &amp;&amp; strpos($line, "require") !== (0 + $si) &amp;&amp; strpos($line, "include") !== (0 + $si)) {
         $line = "\n" . $line;
         $isInclude = FALSE;     
     }
@@ -365,14 +365,15 @@ function indentScript($lines) {
 
   $tContent = "";
   foreach(preg_split("/((\r?\n)|(\r\n?))/", $lines) as $line) {
+    if($i &lt; 0) {
+      $i = 0;
+    }
+    
     if($line == $PHP_TAG || $line == "?&gt;") {
       $tmpline = $line;
     } else {
+      $tab = setTab($i);
       $tmpline = $tab . $line;
-    }
-    
-    if($i &lt; 0) {
-      $i = 0;
     }
     
     $pos = strpos($line, "}");
@@ -774,7 +775,6 @@ function isProtocol($line,$pos) {
   foreach($protocols as $protocol) {
     $ptc = $pos - (strlen($protocol)+1);
     if(strpos($line,$protocol . ":") == $ptc) {
-      echo "here ";
       return TRUE;
     }
   }
@@ -785,12 +785,12 @@ function isProtocol($line,$pos) {
 function cleanSLComments($lines) {
   $tContent = "";
   foreach(preg_split("/((\r?\n)|(\r\n?))/", $lines) as $line) {
-    $line = trim($line);
+    $line = $line;
     $pos = strpos($line, "//"); 
     if($pos !== 0) {
       while($pos !== FALSE) {
         if (!inQuotes($line,$pos) &amp;&amp; !isProtocol($line,$pos)) {
-          $line = substr($line,$pos) . "\n" . substr($line,0,$pos);
+          $line = substr($line,$pos) . "\n" . trim(substr($line,0,$pos));
           if($line[2] != " ") {
              $line = substr_replace($line, " ", 2, 0);
           }
@@ -805,7 +805,7 @@ function cleanSLComments($lines) {
     if($pos !== 0) {
       while($pos !== FALSE) {
         if (!inQuotes($line,$pos)) {
-          $line = substr($line,$pos) . "\n" . substr($line,0,$pos);
+          $line = substr($line,$pos) . "\n" . trim(substr($line,0,$pos));
           if($line[1] != " ") {
              $line = substr_replace($line, " ", 1, 0);
           }
@@ -816,7 +816,7 @@ function cleanSLComments($lines) {
       }
     }
     
-    $tContent .= trim($line) . "\n";
+    $tContent .= $line . "\n";
   }
   return $tContent;
 }
@@ -824,59 +824,63 @@ function cleanSLComments($lines) {
 /* Format multi-line comments */
 function cleanMLComments($lines) {
   $tContent = "";
-  $isMLCom = FALSE;  // multi-line comment
-  $lineNum = 0;                                
+  $isMLCom = FALSE;  // multi-line comment 
+  $ln = 1;                            
   foreach(preg_split("/((\r?\n)|(\r\n?))/", $lines) as $line) {
-    $isFirstLine = FALSE;
-    $nl = "";
+    $pos = strpos($line,"*");
     if(!$isMLCom) {
-      $pos = strpos($line,"/*");                          // start of comment found
-      if($pos !== FALSE) {
+      $pos = strpos($line,"/*");                              // start of comment found
+      while($pos !== FALSE) {
         if($pos &gt; 0) {
-          $line = str_replace("/*", "\n/*", $line);       // ensure comment starts on newline
+          $line = substr_replace($line, "\n", $pos, 0);       // start on newline
+          $pos += 2;                                      
         }
-        $pos += 4;
+        $pos += 2;                                            // move position
         $isMLCom = TRUE;
-        $isFirstLine = TRUE;                              // mark as multi-line comment
+
+        $pos = strpos($line,"*/",$pos);                       // look for end-of-comment marker
+        if($pos !== FALSE) {
+          $isMLCom = FALSE;
+          if($pos+2 != strlen($line)) {
+            $line = substr_replace($line, "\n", $pos+2, 0);   // start on newline
+            $pos += 4;
+          }
+          $pos = strpos($line,"/*",$pos);
+        }
       }
     }
+    
     if($isMLCom) {
-      $pos = strpos($line,"*",$pos);                      // look for other asterisk
       if($pos !== FALSE) {
         if($pos == 0) {                                   // asterisk found at beginning of line
+          $line = " " . $line;                            // align asterisk
+          $pos += 2;
           if($line[$pos+1] == "/") {                      // is this an end-of-comment marker
-            $line = str_replace("*/", " */", $line);      // align asterisk and get out
             $isMLCom = FALSE;
-            $pos = FALSE;
+            $pos++;
+          } 
+          $pos = strpos($line,"*",$pos);
+        } 
+        while($pos !== FALSE) {
+          if($line[$pos+1] == "/") {                         // end-of-comment found - mark and get out
+            $line = substr_replace($line, "\n ", $pos, 0);
+            $isMLCom = FALSE;
+            $pos += 5;
+          } else if($line[$pos-1] == "/") {                  // start of new comment
+            $line = substr_replace($line, "\n", $pos-1, 0);
+            $isMLCom = TRUE;
+            $pos += 3;
           } else {
-            $line = substr_replace($line, " ", $pos, 0);  // else align asterisk 
-            $pos = 2;  
-          }           
-        }
-        while($pos &gt; 0) {
-          $pos = strpos($line,"*",$pos);                  // look for nested asterisk
-          if($pos !== FALSE) {
-            if($line[$pos+1] == "/") {                    // end-of-comment found - mark and get out
-              if(!$isFirstLine) {                         // is comment on one line
-                $line = substr_replace($line, "\n ", $pos, 0);
-              }
-              $isMLCom = FALSE;
-              $pos += 3;
-              //break;
-            } else {                                      // not end of comment
-              if($line[$pos-1] == "/") {                  // start of new comment
-                $line = substr_replace($line, "\n", $pos-1, 0);
-                $isMLCom = TRUE; 
-                $pos += 2; 
-              } else {                                    // comment continues
-                $line = substr_replace($line, "\n *", $pos, 1); // put nested asterisk on new line
-                $pos += 3;
-              }
-            } 
-          }          
-        }
-      }      
-    }    
+            if($line[$pos+1] == "*" || $line[$pos+2] == "*" || $line[$pos+3] == "*") {
+              $pos = FALSE;
+            } else {
+              $line = substr_replace($line, "\n ", $pos, 0); 
+              $pos = strpos($line,"*",$pos+4);
+            }
+          }
+        } // while($pos !== FALSE)
+      }
+    }  
     $tContent .= $line . "\n";
   }
   return $tContent;
@@ -885,7 +889,7 @@ function cleanMLComments($lines) {
 ?&gt;
 </string>
 	<key>input</key>
-	<string>selection</string>
+	<string>document</string>
 	<key>inputFormat</key>
 	<string>text</string>
 	<key>keyEquivalent</key>
