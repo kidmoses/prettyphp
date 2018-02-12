@@ -8,4 +8,4 @@
 
 **Version 1.00**<br>
 *2018/02/11*<br>
-•Initial release<br>
+• Initial release<br>
