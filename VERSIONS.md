@@ -2,7 +2,7 @@
 
 **Version 1.02**<br>
 *2018/02/13*<br>
-• Addes spaces between ){ brackets if not there already<br>
+• Added spaces between ){ brackets if not there already<br>
 • Removed extra blank line after } else { conditions<br>
 • Fixed issues with spacing in multi-line comments<br>
 • Fixed issue with missing space around assignment operators<br>
