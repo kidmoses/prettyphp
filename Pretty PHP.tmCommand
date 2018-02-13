@@ -36,7 +36,7 @@
  * DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, 
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  *
- * @version 1.01 (2018-02-11)
+ * @version 1.02 (2018-02-13)
  * @author  Howard Walsh &lt;prettyphp@kidmoses.com&gt;
  * @package PrettyPHP
  */
@@ -129,7 +129,7 @@ echo $content;                                  //echo out modified content
 function delBlankLines($lines){
   $tContent = "";
   foreach(preg_split("/((\r?\n)|(\r\n?))/", $lines) as $line){
-    if(strlen($line)&gt;0) {
+    if(strlen(trim($line))&gt;0) {
       $tContent .= $line . "\n";
     }
   } 
@@ -195,8 +195,8 @@ function spaceConditions($lines) {
 
 /* add space around operator provided */
 function insertOperatorSpace($line, $op) {
-  $skip1 = "+-=/?&lt;&gt;!#%^&amp;*_|\/:;{}($~`";
-  $skip2 = "+-=/?&lt;&gt;#%^&amp;*_|\/:;{})~`";
+  $skip1 = "+-=/?&lt;&gt;!#%^&amp;*_|\/:;{}($~`"; // skip if any of these symbols are before operator
+  $skip2 = "+-=/?&lt;&gt;#%^&amp;*_|\/:;{})~`";   // skip if any of these symbols are after operator
 
   $skip = 0;
   $pos = strpos($line, $op);   
@@ -242,7 +242,7 @@ function insertOperatorSpace($line, $op) {
 
 /*add spaces around operators */
 function spaceOperators($lines) {
-  GLOBAL $SPACE_MATH_OPERATORS, $SPACE_LOGIC_OPERATORS, $SPACE_EQUALITY_OPERATORS, 
+  GLOBAL $SPACE_MATH_OPERATORS, $SPACE_LOGIC_OPERATORS, $SPACE_EQUALITY_OPERATORS, $SPACE_ASSIGNMENT_OPERATORS,
          $SPACE_RELATIONAL_OPERATORS, $SPACE_BITWISE_OPERATORS;
          
   $tContent = "";  
@@ -303,8 +303,12 @@ function doNewlines($lines) {
   $si = $START_INDENT;
   foreach(preg_split("/((\r?\n)|(\r\n?))/", $lines) as $line){
     $pos = strpos($line, "}");
-    if($pos !== FALSE &amp;&amp; $pos === 0 + $si) {
+    // acount for else and elseif lines and do not add newline
+    if($pos !== FALSE &amp;&amp; $pos === (0 + $si)) {
+      $pos = strpos($line, "else");
+      if($pos === FALSE) {
         $line = $line . "\n";
+      }
     } 
     $pos = strpos($line, "*/");
     if($pos !== FALSE &amp;&amp; $pos == (1 + $si) &amp;&amp; !inQuotes($line, $pos + $si)) {
@@ -507,41 +511,43 @@ function removeBrackets($lines) {
 function formControlStructures($lines) {
   GLOBAL $C_STRUCT;
   
+  // create PEAR style moving opening brackets 
+  // to end of lines on conditionals
   $tContent = "";
-  foreach(preg_split("/((\r?\n)|(\r\n?))/", $lines) as $line) {  
-    $line_end = "\n";
+  foreach(preg_split("/((\r?\n)|(\r\n?))/", $lines) as $line) {
+    $newline = "\n";
     if(!isComment($line)) {
       foreach ($C_STRUCT as $cstruct) {
         if (strpos($line, $cstruct) === 0) {
-          str_replace("\n", "", $line); 
-          $line_end = " ";         
-        }        
+          $line = trim($line) . " ";
+          $newline = "";
+          // fix for while condition at end of loop
+          if ($cstruct == "while" &amp;&amp; strpos($line, ";") !== FALSE) {
+            $line = " " . trim($line);
+            $newline = "\n";
+          }
+        }
       }
     }
-    $tContent .= $line . $line_end;
+    $tContent .= $line . $newline;
   }
   
   // fix else structures
   $tContent = str_replace("}\nelse", "} else", $tContent); 
   
-  // fix do/while structures
+  // fix do/while structures with while at end of loop
+  // move while up one line after closing } bracket
   $pos = strpos($tContent, "do {");
   while ($pos !== FALSE) {
-    $pos = strpos($tContent, "}\nwhile", $pos);
+    $pos = strpos($tContent, "}\n while", $pos);
     if($pos !== FALSE) {
-      $tContent = substr_replace($tContent, " ", $pos+1, 1);
-      $pos = strpos($tContent, ";", $pos+7);
-      if($pos !== FALSE) {
-        $tContent = substr_replace($tContent, "\n", $pos+1, 0);
-        $pos += 2; // hack to clean up possible space after ;
-        while($tContent[$pos] == " ") {
-          $tContent = substr_replace($tContent, "", $pos, 1); 
-          $pos++;
-        }  
-      }
-      $pos = strpos($tContent, "do {", $pos+3);  
+      $tContent = substr_replace($tContent, "", $pos+1, 1);
+      $pos = strpos($tContent, "do {", $pos+3);
     }
-  } 
+  }
+  
+  // fix spacing between round and curly brackets
+  $tContent = str_replace("){", ") {", $tContent); 
 
   return $tContent;    
 }
@@ -613,9 +619,11 @@ function addBracketSpace($lines) {
 function addSpaceBefore($lines, $token) {
   $tContent = "";
   foreach(preg_split("/((\r?\n)|(\r\n?))/", $lines) as $line){
-    if(!isComment($line)) {
-      $line = str_replace(" ".$token, $token, $line);  // remove existing space to prevent double spaces
-      $line = str_replace($token, " ".$token, $line);  // now add space as needed
+    if(isComment($line)) {
+      $line = trim($line);
+      if($line[0] == $token) {
+        $line = " " . $line;
+      }
     }
     $tContent .= $line . "\n";
   }
@@ -854,13 +862,13 @@ function cleanMLComments($lines) {
       if($pos !== FALSE) {
         if($pos == 0) {                                   // asterisk found at beginning of line
           $line = " " . $line;                            // align asterisk
-          $pos += 2;
+          $pos += 1;
           if($line[$pos+1] == "/") {                      // is this an end-of-comment marker
             $isMLCom = FALSE;
             $pos++;
-          } 
+          }
           $pos = strpos($line,"*",$pos);
-        } 
+        }
         while($pos !== FALSE) {
           if($line[$pos+1] == "/") {                         // end-of-comment found - mark and get out
             $line = substr_replace($line, "\n ", $pos, 0);
@@ -874,13 +882,15 @@ function cleanMLComments($lines) {
             if($line[$pos+1] == "*" || $line[$pos+2] == "*" || $line[$pos+3] == "*") {
               $pos = FALSE;
             } else {
-              $line = substr_replace($line, "\n ", $pos, 0); 
+              if($pos &gt; 1) {
+                $line = substr_replace($line, "\n ", $pos, 0);
+              }
               $pos = strpos($line,"*",$pos+4);
             }
           }
         } // while($pos !== FALSE)
       }
-    }  
+    }
     $tContent .= $line . "\n";
   }
   return $tContent;
