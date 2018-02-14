@@ -36,7 +36,7 @@
  * DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, 
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  *
- * @version 1.02 (2018-02-13)
+ * @version 1.03 (2018-02-14)
  * @author  Howard Walsh &lt;prettyphp@kidmoses.com&gt;
  * @package PrettyPHP
  */
@@ -118,7 +118,7 @@ $content = doOneTrueBraceStyle($content);       // do One True Brace Style
 $content = indentScript($content);              // indent the script
 $content = doNewlines($content);                // add newlines before functions
 
-echo $content;                                  //echo out modified content
+echo trim($content);                                  //echo out modified content
 
 
 /////////////////////  FUNCTIONS  //////////////////////
@@ -899,7 +899,7 @@ function cleanMLComments($lines) {
 ?&gt;
 </string>
 	<key>input</key>
-	<string>document</string>
+	<string>selection</string>
 	<key>inputFormat</key>
 	<string>text</string>
 	<key>keyEquivalent</key>
