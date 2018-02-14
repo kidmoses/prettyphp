@@ -4,7 +4,6 @@
 *2018/02/14*<br>
 • Changed input from document to selection<br>
 • Removed blank lines after selection when activating<br>
-• Fixed issues when setting the initial tab space<br>
 
 **Version 1.02**<br>
 *2018/02/13*<br>
