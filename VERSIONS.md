@@ -1,5 +1,12 @@
 ### Version History
 
+
+**Version 1.04**<br>
+*2018/02/15*<br>
+• Added ability to set K&R (OTBS), Allman (BSD) or PEAR style formatting<br>
+• Add ability to delete empty lines<br>
+• Made improvements in adding newlines<br>
+
 **Version 1.03**<br>
 *2018/02/14*<br>
 • Changed input from document to selection<br>
