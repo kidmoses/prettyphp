@@ -36,7 +36,7 @@
  * DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, 
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  *
- * @version 1.03 (2018-02-14)
+ * @version 1.04 (2018-02-15)
  * @author  Howard Walsh &lt;prettyphp@kidmoses.com&gt;
  * @package PrettyPHP
  */
@@ -50,12 +50,11 @@ $PHP_TAG = "&lt;?php";                             // PHP tag - could be &lt;? o
 $TAB_SIZE = 2;                                  // tab size
 $USE_SPACE = TRUE;                              // use space for tabs 
 $START_INDENT = 0;                              // starting indent size 
-$OTBS = TRUE;                                   // use the One True Brace Style (K&amp;R)
 $BRACKET_SPACE = FALSE;                         // add space inside brackets
-$NEWLINES = TRUE;                               // add newlines between structures
 $REMOVE_COMMENTS = FALSE;                       // removes all comments
-$INDENT_CASE = TRUE;                            // indent case/default statements
 $REMOVE_EMPTY_LINES = FALSE;                    // remove blank lines - even if newlines were added
+$ADD_NEWLINES = TRUE;                           // add newlines between functions, conditionals, etc
+$INDENT_CASE = TRUE;                            // indent case/default statements
 $SPACE_CONDITIONS = FALSE;                      // add space after if, for, while, do
 $SPACE_PUNCTUATION = TRUE;                      // adds space after commas and semi-colons
 $SPACE_MATH_OPERATORS = TRUE;                   // spaces around math operators: * / + - =
@@ -65,6 +64,9 @@ $SPACE_RELATIONAL_OPERATORS = TRUE;             // spaces around relational oper
 $SPACE_ASSIGNMENT_OPERATORS = TRUE;             // spaces around assignment operators: += -= *= /=
 $SPACE_BITWISE_OPERATORS = FALSE;               // spaces around bitwise operators: | &amp; ^ &gt;&gt; &lt;&lt; ~
 
+$STYLE = "OTBS";                                // can be set to : OTBS - for K&amp;R style
+                                                //                 BSD  - for Allman style
+                                                //                 PEAR
 
 // Array used for adding space after statement
 // Change to add spaces after statements as desired
@@ -127,6 +129,12 @@ echo trim($content);                                  //echo out modified conten
 
 /* delete blank lines */
 function delBlankLines($lines){
+  GLOBAL $REMOVE_EMPTY_LINES;
+  
+  if(!$REMOVE_EMPTY_LINES) {
+    return($lines);
+  }
+  
   $tContent = "";
   foreach(preg_split("/((\r?\n)|(\r\n?))/", $lines) as $line){
     if(strlen(trim($line))&gt;0) {
@@ -144,6 +152,7 @@ function trimWhitespace($lines){
   } 
   return $tContent;
 }
+
 
 /* adds space after commas and semi-colons */
 function spacePunctuation($lines) {
@@ -290,18 +299,45 @@ function spaceOperators($lines) {
   return $tContent;
 }
 
+/* removes consecutive blank lines from script */
+function removeDoubleBlankLines($lines) {
+  $isBlank = FALSE;
+  $tContent = "";
+  foreach(preg_split("/((\r?\n)|(\r\n?))/", $lines) as $line) {
+    if(strlen($line) == 0) {
+      if(!$isBlank) {
+        $tContent .= $line . "\n";
+      }
+      $isBlank = TRUE;
+    } else {
+      $isBlank = FALSE;
+      $tContent .= $line . "\n";
+    }
+  }
+  return $tContent;
+}
+
 /* add newlines between structures */
 function doNewlines($lines) {
-  GLOBAL $REMOVE_EMPTY_LINES, $START_INDENT;
+  GLOBAL $ADD_NEWLINES, $START_INDENT;
+  
+  $conditions = array("if", "do", "while", "for", "foreach", "switch");
+  
+  if (!$ADD_NEWLINES) {
+    /* as this (doNewlines) is the last function called */
+    /* remove any double blank lines from script */
+    return removeDoubleBlankLines($tContent);
+  }
+
   $tContent = "";
   $isInclude = FALSE;
+  $isComment = FALSE;
+  $isOpenBracket = FALSE;
   
-  if ($REMOVE_EMPTY_LINES) {
-    return $lines;
-  }
-  
+  $ln = 0;
   $si = $START_INDENT;
   foreach(preg_split("/((\r?\n)|(\r\n?))/", $lines) as $line){
+    $ln++;
     $pos = strpos($line, "}");
     // acount for else and elseif lines and do not add newline
     if($pos !== FALSE &amp;&amp; $pos === (0 + $si)) {
@@ -314,15 +350,66 @@ function doNewlines($lines) {
     if($pos !== FALSE &amp;&amp; $pos == (1 + $si) &amp;&amp; !inQuotes($line, $pos + $si)) {
         $line = $line . "\n";
     } 
+    
+    /* add blank line after require and include conditions */
     if(strpos($line, "require") === (0 + $si) || strpos($line, "include") === (0 + $si)) {
+      if (!$isInclude) {
         $isInclude = TRUE;
+      }
+    } else {
+      if($isInclude) {
+        $isInclude = FALSE;
+        if(strlen($line) &gt; 0) {
+          $line = "\n" . $line;
+        }
+      }
     }
-    if($isInclude &amp;&amp; strpos($line, "require") !== (0 + $si) &amp;&amp; strpos($line, "include") !== (0 + $si)) {
+    
+    /* put blank line before functions */
+    $pos = strpos($line, "function ");
+    if($pos !== FALSE &amp;&amp; !inQuotes($line, $pos) &amp;&amp; !isComment(trim($line))) {
+      if(!$isComment){
         $line = "\n" . $line;
-        $isInclude = FALSE;     
+      }
     }
+    
+    /* put blank line before conditionals */
+    foreach($conditions as $condition) {
+      $pos = strpos($line, $condition); 
+      if($pos !== FALSE &amp;&amp; $pos == (0 + $si) &amp;&amp; !inQuotes($line, $pos) &amp;&amp; !isComment($line)) {
+        if(!$isComment) {
+          if(!$isOpenBracket) {
+            $line = "\n" . $line;
+          }
+        }  
+      }
+    }
+    
+    /* put blank line before start of comments */
+    if(isComment($line) &amp;&amp; $ln &gt; 3) {
+      if(!$isComment) {
+        $isComment = TRUE;
+        $line = "\n" . $line;
+      }
+    } else {
+      $isComment = FALSE;
+    }
+    
+    /* check for open brackets - ie: start of function */
+    $pos = strpos($line, "{"); 
+    if($pos !== FALSE &amp;&amp; !inQuotes($line, $pos) &amp;&amp; !isComment($line)) {
+        $isOpenBracket = TRUE;
+    } else {
+      $isOpenBracket = FALSE;
+    }
+    
+    /* add line after changes*/
     $tContent .= $line . "\n";
   } 
+
+  /* remove double newlines before returning content */
+  $tContent = removeDoubleBlankLines($tContent);
+  
   return $tContent;  
 }
 
@@ -464,11 +551,11 @@ function indentScript($lines) {
 
 /* put opening brackets on line before bracket */
 function doOneTrueBraceStyle($lines) {
-  GLOBAL $OTBS;
+  GLOBAL $STYLE;
   
-  if(!$OTBS) {
+  if($STYLE != "OTBS") {
     return ($lines);
-  }  
+  }
   
   $tContent = $lines;
   $tContent = str_replace("\n{\n", " {\n", $tContent); 
@@ -509,7 +596,11 @@ function removeBrackets($lines) {
 
 /* align brackets for control structures */
 function formControlStructures($lines) {
-  GLOBAL $C_STRUCT;
+  GLOBAL $C_STRUCT, $STYLE;
+  
+  if($STYLE == "BSD") {
+    return ($lines);
+  }
   
   // create PEAR style moving opening brackets 
   // to end of lines on conditionals
@@ -793,8 +884,12 @@ function isProtocol($line,$pos) {
 function cleanSLComments($lines) {
   $tContent = "";
   foreach(preg_split("/((\r?\n)|(\r\n?))/", $lines) as $line) {
-    $line = $line;
     $pos = strpos($line, "//"); 
+    // if($pos !== FALSE &amp;&amp; $pos !== 0) {
+    //   if(!inQuotes($line,$pos) &amp;&amp; !isProtocol($line,$pos)) {
+    //     $line = substr($line,0,$pos) . "\n&lt;cmt&gt;" . substr($line,$pos);
+    //   }
+    // }
     if($pos !== 0) {
       while($pos !== FALSE) {
         if (!inQuotes($line,$pos) &amp;&amp; !isProtocol($line,$pos)) {
@@ -808,6 +903,7 @@ function cleanSLComments($lines) {
         }
       }
     }
+    
     
     $pos = strpos($line, "#"); 
     if($pos !== 0) {
