@@ -1,6 +1,14 @@
 ### Version History
 
 
+**Version 1.05**<br>
+*2018/02/18*<br>
+• Improved algorithm for comments<br>
+• Comments on same line as code can be set above, below or remain on same line as code<br>
+• Can now set column to start comments at following code on same line<br>
+• Can now convert # comments to // comments<br>
+• Improved performance and minor bug fixes<br>
+
 **Version 1.04**<br>
 *2018/02/15*<br>
 • Added ability to set K&R (OTBS), Allman (BSD) or PEAR style formatting<br>
