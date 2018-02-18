@@ -50,22 +50,33 @@ Scroll down to the Default Configuration section of the code and change the opti
 $PHP_TAG = "<?php";                             // PHP tag - could be <? or <?php or <?PHP
 $TAB_SIZE = 2;                                  // tab size
 $USE_SPACE = TRUE;                              // use space for tabs 
-$START_INDENT = 0;                              // starting indent size 
-$OTBS = TRUE;                                   // use the One True Brace Style (K&amp;R)
+$START_INDENT = 2;                              // starting indent size 
 $BRACKET_SPACE = FALSE;                         // add space inside brackets
-$NEWLINES = TRUE;                               // add newlines between structures
 $REMOVE_COMMENTS = FALSE;                       // removes all comments
-$INDENT_CASE = TRUE;                            // indent case/default statements
+$CONVERT_COMMENTS = TRUE;                       // convert # comments to // comments
 $REMOVE_EMPTY_LINES = FALSE;                    // remove blank lines - even if newlines were added
+$ADD_NEWLINES = TRUE;                           // add newlines between functions, conditionals, etc
+$INDENT_CASE = TRUE;                            // indent case/default statements
 $SPACE_CONDITIONS = FALSE;                      // add space after if, for, while, do
 $SPACE_PUNCTUATION = TRUE;                      // adds space after commas and semi-colons
 $SPACE_MATH_OPERATORS = TRUE;                   // spaces around math operators: * / + - =
-$SPACE_LOGIC_OPERATORS = TRUE;                  // spaces around logical operators: &amp;&amp; ||
+$SPACE_LOGIC_OPERATORS = TRUE;                  // spaces around logical operators: && ||
 $SPACE_EQUALITY_OPERATORS = TRUE;               // spaces around equality operators: === !=== == !=
 $SPACE_RELATIONAL_OPERATORS = TRUE;             // spaces around relational operators: <= >= < >
 $SPACE_ASSIGNMENT_OPERATORS = TRUE;             // spaces around assignment operators: += -= *= /=
-$SPACE_BITWISE_OPERATORS = FALSE;               // spaces around bitwise operators: | &amp; ^ >> << ~
+$SPACE_BITWISE_OPERATORS = FALSE;               // spaces around bitwise operators: | & ^ >> << ~
 
+$STYLE = "OTBS";                                // can be set to : OTBS - for K&R style
+                                                //                 BSD  - for Allman style
+                                                //                 PEAR
+                                                
+$COMMENT_POSITION = 2;                          // set inline comments 1) ABOVE code line, 
+                                                //                     2) SAME line as code
+                                                //                     3) BELOW code line
+
+$COMMENT_ALIGN = 40;                            // if $COMMENT_POSITION is set to 2
+                                                // align first comment after code to this column
+                                                // set to 0 to disable
 
 // Array used for adding space after statement
 // Change to add spaces after statements as desired
@@ -86,11 +97,11 @@ You can also comment out functions you do not need or want. This will also help 
 //////////////// CONTROL FUNCTIONS ///////////////////
 /*             Comment out as desired               */
 //////////////////////////////////////////////////////
-
 $content = trimWhitespace($content);            // trim whitespace from lines
-$content = cleanMLComments($content);           // clean multi-line comments
-$content = cleanSLComments($content);           // clean single-line comments
+
+$content = cleanComments($content);             // clean inline comments
 $content = removeComments($content);            // remove unwanted comments
+$content = convertComments($content);           // convert # comments to // comments
 
 $content = delBlankLines($content);             // remove blank lines
 
@@ -102,9 +113,6 @@ $content = newLineAfter($content, "}");         // end of function
 $content = newLineAfter($content, ";");         // end of line
 $content = newLineAfter($content, ":");         // switch / case, etc.
 
-$content = trimWhitespace($content);            // trim whitespace from lines
-
-$content = addSpaceBefore($content,"*");        // align multi-line comment
 $content = addBracketSpace($content);           // add space around brackets
 
 $content = spaceOperators($content);            // spaces around math operators
@@ -115,7 +123,7 @@ $content = formControlStructures($content);     // move opening brackets to end 
 $content = removeBrackets($content);            // remove brackets from require/include statements
 $content = doOneTrueBraceStyle($content);       // do One True Brace Style
 $content = indentScript($content);              // indent the script
-$content = doNewlines($content);                // add newlines before functions
+$content = cleanUp($content);
 ```
 
 Usage
