@@ -36,7 +36,7 @@
  * DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, 
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  *
- * @version 1.04 (2018-02-15)
+ * @version 1.05 (2018-02-18)
  * @author  Howard Walsh &lt;prettyphp@kidmoses.com&gt;
  * @package PrettyPHP
  */
@@ -52,6 +52,7 @@ $USE_SPACE = TRUE;                              // use space for tabs
 $START_INDENT = 0;                              // starting indent size 
 $BRACKET_SPACE = FALSE;                         // add space inside brackets
 $REMOVE_COMMENTS = FALSE;                       // removes all comments
+$CONVERT_COMMENTS = TRUE;                       // convert # comments to // comments
 $REMOVE_EMPTY_LINES = FALSE;                    // remove blank lines - even if newlines were added
 $ADD_NEWLINES = TRUE;                           // add newlines between functions, conditionals, etc
 $INDENT_CASE = TRUE;                            // indent case/default statements
@@ -67,6 +68,14 @@ $SPACE_BITWISE_OPERATORS = FALSE;               // spaces around bitwise operato
 $STYLE = "OTBS";                                // can be set to : OTBS - for K&amp;R style
                                                 //                 BSD  - for Allman style
                                                 //                 PEAR
+                                                
+$COMMENT_POSITION = 2;                          // set inline comments 1) ABOVE code line, 
+                                                //                     2) SAME line as code
+                                                //                     3) BELOW code line
+
+$COMMENT_ALIGN = 40;                            // if $COMMENT_POSITION is set to 2
+                                                // align first comment after code to this column
+                                                // set to 0 to disable
 
 // Array used for adding space after statement
 // Change to add spaces after statements as desired
@@ -91,9 +100,10 @@ $content = str_ireplace ("&lt;?php","&lt;?",$content);
 $content = str_ireplace ("&lt;?",$PHP_TAG,$content);
 
 $content = trimWhitespace($content);            // trim whitespace from lines
-$content = cleanMLComments($content);           // clean multi-line comments
-$content = cleanSLComments($content);           // clean single-line comments
+
+$content = cleanComments($content);             // clean inline comments
 $content = removeComments($content);            // remove unwanted comments
+$content = convertComments($content);           // convert # comments to // comments
 
 $content = delBlankLines($content);             // remove blank lines
 
@@ -105,9 +115,6 @@ $content = newLineAfter($content, "}");         // end of function
 $content = newLineAfter($content, ";");         // end of line
 $content = newLineAfter($content, ":");         // switch / case, etc.
 
-$content = trimWhitespace($content);            // trim whitespace from lines
-
-$content = addSpaceBefore($content,"*");        // align multi-line comment
 $content = addBracketSpace($content);           // add space around brackets
 
 $content = spaceOperators($content);            // spaces around math operators
@@ -118,14 +125,21 @@ $content = formControlStructures($content);     // move opening brackets to end 
 $content = removeBrackets($content);            // remove brackets from require/include statements
 $content = doOneTrueBraceStyle($content);       // do One True Brace Style
 $content = indentScript($content);              // indent the script
-$content = doNewlines($content);                // add newlines before functions
+$content = cleanUp($content);
 
-echo trim($content);                                  //echo out modified content
+echo $content;                                  //echo out modified content
 
 
 /////////////////////  FUNCTIONS  //////////////////////
 /*            ++ Do Not Change Below ++               */
 ////////////////////////////////////////////////////////
+
+/* add newlines, delete double blank lines, and reset comments */
+function cleanUp($lines) {
+  $lines = doNewlines($lines);            
+  $lines = resetComments($lines); 
+  return trim($lines);
+}
 
 /* delete blank lines */
 function delBlankLines($lines){
@@ -134,7 +148,6 @@ function delBlankLines($lines){
   if(!$REMOVE_EMPTY_LINES) {
     return($lines);
   }
-  
   $tContent = "";
   foreach(preg_split("/((\r?\n)|(\r\n?))/", $lines) as $line){
     if(strlen(trim($line))&gt;0) {
@@ -152,7 +165,6 @@ function trimWhitespace($lines){
   } 
   return $tContent;
 }
-
 
 /* adds space after commas and semi-colons */
 function spacePunctuation($lines) {
@@ -304,7 +316,7 @@ function removeDoubleBlankLines($lines) {
   $isBlank = FALSE;
   $tContent = "";
   foreach(preg_split("/((\r?\n)|(\r\n?))/", $lines) as $line) {
-    if(strlen($line) == 0) {
+    if(strlen(trim($line)) == 0) {
       if(!$isBlank) {
         $tContent .= $line . "\n";
       }
@@ -319,7 +331,7 @@ function removeDoubleBlankLines($lines) {
 
 /* add newlines between structures */
 function doNewlines($lines) {
-  GLOBAL $ADD_NEWLINES, $START_INDENT;
+  GLOBAL $ADD_NEWLINES, $START_INDENT, $COMMENT_POSITION;
   
   $conditions = array("if", "do", "while", "for", "foreach", "switch");
   
@@ -346,6 +358,8 @@ function doNewlines($lines) {
         $line = $line . "\n";
       }
     } 
+    
+    /* add blank line after end of block comment */
     $pos = strpos($line, "*/");
     if($pos !== FALSE &amp;&amp; $pos == (1 + $si) &amp;&amp; !inQuotes($line, $pos + $si)) {
         $line = $line . "\n";
@@ -358,8 +372,8 @@ function doNewlines($lines) {
       }
     } else {
       if($isInclude) {
-        $isInclude = FALSE;
-        if(strlen($line) &gt; 0) {
+        if(strlen($line) &gt; 0 &amp;&amp; !isComment(trim($line))) {
+          $isInclude = FALSE;
           $line = "\n" . $line;
         }
       }
@@ -386,10 +400,12 @@ function doNewlines($lines) {
     }
     
     /* put blank line before start of comments */
-    if(isComment($line) &amp;&amp; $ln &gt; 3) {
+    if(isComment(trim($line)) &amp;&amp; $ln &gt; 3) {
       if(!$isComment) {
         $isComment = TRUE;
-        $line = "\n" . $line;
+        if($COMMENT_POSITION == 1) {
+          $line = "\n" . $line;
+        }
       }
     } else {
       $isComment = FALSE;
@@ -398,7 +414,7 @@ function doNewlines($lines) {
     /* check for open brackets - ie: start of function */
     $pos = strpos($line, "{"); 
     if($pos !== FALSE &amp;&amp; !inQuotes($line, $pos) &amp;&amp; !isComment($line)) {
-        $isOpenBracket = TRUE;
+      $isOpenBracket = TRUE;
     } else {
       $isOpenBracket = FALSE;
     }
@@ -460,7 +476,7 @@ function indentScript($lines) {
       $i = 0;
     }
     
-    if($line == $PHP_TAG || $line == "?&gt;") {
+    if($line == $PHP_TAG || trim($line) == "?&gt;") {
       $tmpline = $line;
     } else {
       $tab = setTab($i);
@@ -707,6 +723,7 @@ function addBracketSpace($lines) {
 }
 
 /* add space before token - ie: * in multi-line comments at start of script */
+/* not currently used */
 function addSpaceBefore($lines, $token) {
   $tContent = "";
   foreach(preg_split("/((\r?\n)|(\r\n?))/", $lines) as $line){
@@ -795,27 +812,6 @@ function isCode($line,$pos) {
   return TRUE;
 }
 
-/* checks if given line is a comment line - usually just ignored in script */
-function isComment($line) {
-  $pos = strpos($line, "//");
-  if($pos !== FALSE &amp;&amp; $pos === 0) {
-    return TRUE;
-  }
-  $pos = strpos($line, "#");
-  if($pos !== FALSE &amp;&amp; $pos === 0) {
-    return TRUE;
-  }
-  $pos = strpos($line, "/*");
-  if($pos !== FALSE &amp;&amp; $pos === 0) {
-    return TRUE;
-  }
-  $pos = strpos($line, "*");
-  if($pos !== FALSE &amp;&amp; $pos &lt;2) {
-    return TRUE;
-  }
-  return FALSE;  
-}
-
 /* check if certain position in string ($ptc) is */
 /* inside brackets - ie: for($x=3;$x&lt;3;$==) */
 function inBrackets($line, $ptc) {
@@ -866,133 +862,189 @@ function inQuotes($line, $ptc) {
   return FALSE;  
 }
 
+/* checks if given line is a comment line - usually just ignored in script */
+function isComment($line) {
+  $needles = array("//", "#", "/*", "*", "*/", ".//", "./*", ".#");
+  foreach($needles as $needle) {
+    $pos = strpos(trim($line), $needle);
+    /* comment found and is at beginning of line */
+    if($pos !== false &amp;&amp; $pos &lt; 2) return true; // stop on first true result
+  }
+  return false; 
+}
+
 function isProtocol($line,$pos) {
-  /*$protocols = array("ARP","DHCP","DNS","DSN","FTP","FTPS","HTTP","HTTPS","IMAP",'ICMP',"IDRP","IP","IRC",
-                     "POP3","PAR","RLOGIN","SMTP","SSL","SSH","TCP","TELNET","UPD","UPS"); */
-  
-  $protocols = array("FTP","FTPS","HTTP","HTTPS");
-  foreach($protocols as $protocol) {
-    $ptc = $pos - (strlen($protocol)+1);
-    if(strpos($line,$protocol . ":") == $ptc) {
+  $line = strtolower($line);
+  if($line[$pos-1] == ":") {
+    if($line[$pos-2] == "s" &amp;&amp; $line[$pos-3] == "p" &amp;&amp; $line[$pos-4] == "t") {
+      return TRUE;
+    }
+    if($line[$pos-2] == "p" &amp;&amp; $line[$pos-3] == "t") {
       return TRUE;
     }
   }
   return FALSE;  
 }
 
-/* Format single-line comments */
-function cleanSLComments($lines) {
+/* helper function to look for array values */
+function strposa($haystack, $needle, $offset=0) {
+  if(!is_array($needle)) $needle = array($needle);
+  foreach($needle as $query) {
+    if(strpos($haystack, $query, $offset) !== false) return true; // stop on first true result
+  }
+  return false;
+}
+
+/* convert # comments to // comments */
+function convertComments($lines) {
+  GLOBAL $CONVERT_COMMENTS;
+  
+  if(!$CONVERT_COMMENTS) {
+    return $lines;
+  }
+  
   $tContent = "";
   foreach(preg_split("/((\r?\n)|(\r\n?))/", $lines) as $line) {
-    $pos = strpos($line, "//"); 
-    // if($pos !== FALSE &amp;&amp; $pos !== 0) {
-    //   if(!inQuotes($line,$pos) &amp;&amp; !isProtocol($line,$pos)) {
-    //     $line = substr($line,0,$pos) . "\n&lt;cmt&gt;" . substr($line,$pos);
-    //   }
-    // }
+    $pos = strpos($line,"#");
     if($pos !== 0) {
-      while($pos !== FALSE) {
-        if (!inQuotes($line,$pos) &amp;&amp; !isProtocol($line,$pos)) {
-          $line = substr($line,$pos) . "\n" . trim(substr($line,0,$pos));
-          if($line[2] != " ") {
-             $line = substr_replace($line, " ", 2, 0);
-          }
-          $pos = FALSE;
-        } else {
-          $pos = strpos($line, "//", $pos+2);
-        }
-      }
+      $line = str_replace("#", "//", $line);
     }
-    
-    
-    $pos = strpos($line, "#"); 
-    if($pos !== 0) {
-      while($pos !== FALSE) {
-        if (!inQuotes($line,$pos)) {
-          $line = substr($line,$pos) . "\n" . trim(substr($line,0,$pos));
-          if($line[1] != " ") {
-             $line = substr_replace($line, " ", 1, 0);
-          }
-          $pos = FALSE;
-        } else {
-          $pos = strpos($line, "#", $pos+1);
-        }
-      }
-    }
-    
     $tContent .= $line . "\n";
   }
   return $tContent;
 }
 
-/* Format multi-line comments */
-function cleanMLComments($lines) {
+/* Put comments back on code line */
+function resetComments($lines) {
+  GLOBAL $COMMENT_ALIGN;
+  
   $tContent = "";
-  $isMLCom = FALSE;  // multi-line comment 
-  $ln = 1;                            
+  $tokens = array(".//", "./*", ".#");
+  $comments = array();
+  $isComments = FALSE;
   foreach(preg_split("/((\r?\n)|(\r\n?))/", $lines) as $line) {
-    $pos = strpos($line,"*");
-    if(!$isMLCom) {
-      $pos = strpos($line,"/*");                              // start of comment found
-      while($pos !== FALSE) {
-        if($pos &gt; 0) {
-          $line = substr_replace($line, "\n", $pos, 0);       // start on newline
-          $pos += 2;                                      
-        }
-        $pos += 2;                                            // move position
-        $isMLCom = TRUE;
-
-        $pos = strpos($line,"*/",$pos);                       // look for end-of-comment marker
-        if($pos !== FALSE) {
-          $isMLCom = FALSE;
-          if($pos+2 != strlen($line)) {
-            $line = substr_replace($line, "\n", $pos+2, 0);   // start on newline
-            $pos += 4;
+    if(strposa($line,$tokens)) {
+      $comments[] = $line;
+      $isComments = TRUE;
+    } else {
+      if($isComments) {
+        foreach($comments as $comment) {
+          if($COMMENT_ALIGN) {
+            $pad = $COMMENT_ALIGN;
+            while(strlen(rtrim($line)) &gt; $pad) {
+              $pad += 4;
+            }  
+          
+            $line = str_pad(rtrim($line), $pad);
           }
-          $pos = strpos($line,"/*",$pos);
+          $line .= "  " . substr(trim($comment),1);          
         }
+        $isComments = FALSE;
+        $comments = array();
+      }
+      $tContent .= $line . "\n";
+    }
+  }
+  unset($comments);
+  return $tContent;
+}
+
+/* Format single-line comments */
+function cleanComments($lines) {
+  GLOBAL $COMMENT_POSITION;
+  
+  $tContent = "";
+  $isMLComment = FALSE;
+  foreach(preg_split("/((\r?\n)|(\r\n?))/", $lines) as $line) {
+    $mlStart = NULL;
+    $comments = array();
+    for($i=0;$i&lt;strlen($line);$i++) {
+      /* check for standard comment */
+      if($line[$i] == "/" &amp;&amp; $line[$i+1] == "/") {
+        /* skip comments at beginning of line */
+        if($i == 0) { break; }
+        if(!isProtocol($line,$i) &amp;&amp; !inQuotes($line, $i)) { 
+          $comments[] = substr($line,$i);
+          break;
+        }
+      }
+      
+      /* check for C-type comment */
+      if($line[$i] == "#") {
+        /* skip comments at beginning of line */
+        if($i == 0) { break; } 
+        if(!inQuotes($line, $i)) { 
+          $comments[] = substr($line,$i);
+          break;
+        }
+      }
+      
+      /* check for multi-line comment */
+      if($line[$i] == "/" &amp;&amp; $line[$i+1] == "*" &amp;&amp; !inQuotes($line, $i)) {
+        $isMLComment = TRUE;
+        $mlStart = $i;
+      }
+      
+      /* check for end of multi-line comment */
+      if($isMLComment &amp;&amp; $line[$i] == "*" &amp;&amp; $line[$i+1] == "/" &amp;&amp; !inQuotes($line, $i)) {
+        $isMLComment = FALSE;
+        /* if not NULL, comment is on same line */
+        /* skip if comment starts at beginning of line */
+        if($mlStart !== NULL &amp;&amp; $mlStart !== 0 ) {
+          $len = $i + 2 - $mlStart;
+          $comments[] = substr($line,$mlStart,$len);
+          $i++;
+        } 
+        /* if comment started on a previous line, move end-of-comment marker to it's own line */
+        if($mlStart === NULL &amp;&amp; $i &gt; 1) {
+          /* move end-of-comment marker to newline in multi-line comment */
+          $line = substr_replace($line, "\n ", $i, 0);
+          $line = substr($line,0,$i+4) . "\n" . trim(substr($line,$i+4));
+        }
+        $mlStart = NULL;
       }
     }
     
-    if($isMLCom) {
-      if($pos !== FALSE) {
-        if($pos == 0) {                                   // asterisk found at beginning of line
-          $line = " " . $line;                            // align asterisk
-          $pos += 1;
-          if($line[$pos+1] == "/") {                      // is this an end-of-comment marker
-            $isMLCom = FALSE;
-            $pos++;
-          }
-          $pos = strpos($line,"*",$pos);
+    $comStr = "";
+    $sl = $COMMENT_POSITION == 2 ? "." : "";
+    if(count($comments)) {
+      foreach($comments as $comment) {
+        if($COMMENT_POSITION == 3) {
+          $comStr .= "\n" . $sl . $comment;
+        } else {
+          $comStr .= $sl . $comment . "\n";
         }
-        while($pos !== FALSE) {
-          if($line[$pos+1] == "/") {                         // end-of-comment found - mark and get out
-            $line = substr_replace($line, "\n ", $pos, 0);
-            $isMLCom = FALSE;
-            $pos += 5;
-          } else if($line[$pos-1] == "/") {                  // start of new comment
-            $line = substr_replace($line, "\n", $pos-1, 0);
-            $isMLCom = TRUE;
-            $pos += 3;
-          } else {
-            if($line[$pos+1] == "*" || $line[$pos+2] == "*" || $line[$pos+3] == "*") {
-              $pos = FALSE;
-            } else {
-              if($pos &gt; 1) {
-                $line = substr_replace($line, "\n ", $pos, 0);
-              }
-              $pos = strpos($line,"*",$pos+4);
-            }
-          }
-        } // while($pos !== FALSE)
+        $line = str_replace($comment, "", $line);
+      }
+      
+      if($COMMENT_POSITION == 3) {
+        $line = $line . $comStr;
+      } else {
+        $line = $comStr . $line;
       }
     }
+    
+    /* clear comments */
+    $comments = array();
+    
+    /* if end of multi-line comment not found */
+    /* start comment on new line below code */
+    if($isMLComment &amp;&amp; $mlStart != NULL) {
+      $line = substr($line,0,$mlStart) . "\n" . substr($line,$mlStart);
+    }
+    
+    /* align asterisk from multi-line comments if used */
+    if($line[0] == "*") {
+      $line = " " . $line;
+    }
     $tContent .= $line . "\n";
-  }
+  } #foreach
+  unset($comments);
   return $tContent;
 }
 
 ?&gt;
+
 </string>
 	<key>input</key>
 	<string>selection</string>
@@ -1011,7 +1063,7 @@ function cleanMLComments($lines) {
 	<key>scope</key>
 	<string>text.html.php</string>
 	<key>uuid</key>
-	<string>8C581571-DB22-4296-9835-DE276EED661C</string>
+	<string>8002F373-B329-4334-A288-CF5BD8512754</string>
 	<key>version</key>
 	<integer>2</integer>
 </dict>
