@@ -1,6 +1,11 @@
 ### Version History
 
 
+**Version 1.06**<br>
+*2018/02/22*<br>
+• Added command to align assignments<br>
+• Added command to align comments<br>
+
 **Version 1.05**<br>
 *2018/02/18*<br>
 • Improved algorithm for comments<br>
