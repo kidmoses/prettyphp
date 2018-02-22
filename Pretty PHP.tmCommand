@@ -36,7 +36,7 @@
  * DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, 
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  *
- * @version 1.05 (2018-02-18)
+ * @version 1.06 (2018-02-22)
  * @author  Howard Walsh &lt;prettyphp@kidmoses.com&gt;
  * @package PrettyPHP
  */
@@ -1051,7 +1051,7 @@ function cleanComments($lines) {
 	<key>inputFormat</key>
 	<string>text</string>
 	<key>keyEquivalent</key>
-	<string>~@C</string>
+	<string>^~@c</string>
 	<key>name</key>
 	<string>Pretty PHP</string>
 	<key>outputCaret</key>

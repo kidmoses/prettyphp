@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>beforeRunningCommand</key>
+	<string>nop</string>
+	<key>command</key>
+	<string>#!/bin/bash
+[[ -f "${TM_SUPPORT_PATH}/lib/bash_init.sh" ]] &amp;&amp; . "${TM_SUPPORT_PATH}/lib/bash_init.sh"
+
+if [[ -z $TM_SELECTED_TEXT ]]; then
+  exit_show_tool_tip 'Pretty PHP - Align Comments: No Text Selected to Align'
+fi
+
+#!/bin/sh
+cat /dev/stdin &gt;orig
+"${TM_BUNDLE_SUPPORT}/align-c.php" source orig &gt; output
+if [[ -s output ]]; then
+cat output;
+else
+cat orig;
+fi
+rm orig;
+rm output;</string>
+	<key>input</key>
+	<string>selection</string>
+	<key>inputFormat</key>
+	<string>text</string>
+	<key>keyEquivalent</key>
+	<string>^~@/</string>
+	<key>name</key>
+	<string>Align Comments</string>
+	<key>outputCaret</key>
+	<string>afterOutput</string>
+	<key>outputFormat</key>
+	<string>text</string>
+	<key>outputLocation</key>
+	<string>replaceInput</string>
+	<key>scope</key>
+	<string>text.html.php</string>
+	<key>uuid</key>
+	<string>1BFF1839-2489-4864-A3FE-7C96FA142D87</string>
+	<key>version</key>
+	<integer>2</integer>
+</dict>
+</plist>
